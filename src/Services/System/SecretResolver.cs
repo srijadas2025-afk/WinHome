@@ -26,7 +26,7 @@ namespace WinHome.Services.System
             public uint Type;
             public string TargetName;
             public string Comment;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+            public long LastWritten;
             public uint CredentialBlobSize;
             public IntPtr CredentialBlob;
             public uint Persist;
@@ -155,24 +155,29 @@ namespace WinHome.Services.System
                 return string.Empty;
             }
 
-            if (!CredRead(targetName, 1 /* CRED_TYPE_GENERIC */, 0, out IntPtr credPtr))
+            // Try CRED_TYPE_GENERIC (1) first, then CRED_TYPE_DOMAIN_PASSWORD (2) used by cmdkey
+            uint[] credTypes = { 1, 2 };
+            foreach (var credType in credTypes)
             {
-                _logger.LogWarning($"[Secret] Credential '{targetName}' not found in Windows Credential Manager.");
-                return string.Empty;
+                if (!CredRead(targetName, credType, 0, out IntPtr credPtr))
+                    continue;
+
+                try
+                {
+                    var cred = Marshal.PtrToStructure<CREDENTIAL>(credPtr);
+                    if (cred.CredentialBlobSize == 0 || cred.CredentialBlob == IntPtr.Zero)
+                        return string.Empty;
+
+                    return Marshal.PtrToStringUni(cred.CredentialBlob, (int)(cred.CredentialBlobSize / sizeof(char)));
+                }
+                finally
+                {
+                    CredFree(credPtr);
+                }
             }
 
-            try
-            {
-                var cred = Marshal.PtrToStructure<CREDENTIAL>(credPtr);
-                if (cred.CredentialBlobSize == 0 || cred.CredentialBlob == IntPtr.Zero)
-                    return string.Empty;
-
-                return Marshal.PtrToStringUni(cred.CredentialBlob, (int)(cred.CredentialBlobSize / sizeof(char)));
-            }
-            finally
-            {
-                CredFree(credPtr);
-            }
+            _logger.LogWarning($"[Secret] Credential '{targetName}' not found in Windows Credential Manager.");
+            return string.Empty;
         }
 
         private string ResolveFile(string path)
