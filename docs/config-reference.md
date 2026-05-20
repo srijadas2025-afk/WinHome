@@ -54,6 +54,29 @@ extensions:
           - "obsidian-git"
 ```
 
+**Example (PowerToys Plugin):**
+```yaml
+extensions:
+  powertoys:
+    general:
+      settings:
+        theme: 0
+    modules:
+      fancyzones:
+        enabled: true
+        settings:
+          shiftDrag: true
+      awake:
+        enabled: true
+        settings:
+          keepAwake: true
+          keepAwakeTimeInMinutes: 30
+      powerrename:
+        enabled: true
+        settings:
+          isEnabled: true
+```
+
 ## Apps
 Install applications using supported managers (`winget`, `scoop`, `choco`) or installed plugins.
 
