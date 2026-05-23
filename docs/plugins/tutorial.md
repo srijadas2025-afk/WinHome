@@ -92,13 +92,13 @@ When WinHome runs your plugin, it sends a single-line JSON object to your plugin
 {
   "requestId": "550e8400-e29b-41d4-a716-446655440000",
   "command": "apply",
-  "dryRun": false,
   "args": {
     "setting1": "value"
   },
   "context": {
     "osVersion": "10.0.19045",
-    "isAdmin": true
+    "isAdmin": true,
+    "dryRun": false
   }
 }
 ```
@@ -107,9 +107,8 @@ When WinHome runs your plugin, it sends a single-line JSON object to your plugin
 |---|---|
 | `requestId` | Unique ID — your response must echo this back |
 | `command` | What to do — currently `apply` is the primary command used by all plugins |
-| `dryRun` | If `true`, simulate changes without applying them |
 | `args` | Your plugin's config from the user's `config.yaml` (referred to as `config` in the protocol spec) |
-| `context` | System info provided by WinHome |
+| `context` | System info provided by WinHome, including `dryRun`, `osVersion`, and `isAdmin` |
 
 > **Note**: The protocol spec (`plugin_spec_v1.md`) refers to this field as `config`. The existing plugins (obsidian, vscode) use `args`. Follow the existing plugins when building your own.
 
@@ -154,7 +153,8 @@ def main():
 
     request_id = request.get("requestId")
     command = request.get("command")
-    dry_run = request.get("dryRun", False)
+    context = request.get("context", {})
+    dry_run = context.get("dryRun", False)
 
     # Log to stderr — WinHome captures this
     sys.stderr.write(f"[hello-world] Received command: {command}\n")
@@ -213,7 +213,8 @@ process.stdin.on("data", (chunk) => {
 
 process.stdin.on("end", () => {
     const request = JSON.parse(inputData);
-    const { requestId, command, dryRun } = request;
+    const { requestId, command, context = {} } = request;
+    const dryRun = context.dryRun ?? false;
 
     // Log to stderr — WinHome captures this
     process.stderr.write(`[hello-world-js] Received command: ${command}\n`);
@@ -319,7 +320,8 @@ def main():
     request_id = request.get("requestId")
     command = request.get("command")
     args = request.get("args", {})
-    dry_run = request.get("dryRun", False)
+    context = request.get("context", {})
+    dry_run = context.get("dryRun", False)
 
     response = {"requestId": request_id, "success": False, "changed": False, "error": None}
 
@@ -385,11 +387,11 @@ def test_apply_settings():
         res = run_plugin({
             "requestId": "1",
             "command": "apply",
-            "dryRun": False,
             "args": {
                 "settingsPath": settings_path,
                 "settings": {"theme": "dark", "fontSize": 14}
-            }
+            },
+            "context": {"dryRun": False}
         })
         assert res["success"]
         assert res["changed"]
@@ -406,8 +408,8 @@ def test_idempotent():
         payload = {
             "requestId": "2",
             "command": "apply",
-            "dryRun": False,
-            "args": {"settingsPath": settings_path, "settings": {"theme": "dark"}}
+            "args": {"settingsPath": settings_path, "settings": {"theme": "dark"}},
+            "context": {"dryRun": False}
         }
         run_plugin(payload)
         res = run_plugin(payload)
@@ -422,8 +424,8 @@ def test_dry_run():
         res = run_plugin({
             "requestId": "3",
             "command": "apply",
-            "dryRun": True,
-            "args": {"settingsPath": settings_path, "settings": {"theme": "dark"}}
+            "args": {"settingsPath": settings_path, "settings": {"theme": "dark"}},
+            "context": {"dryRun": True}
         })
         assert res["success"]
         assert not res["changed"]
@@ -435,8 +437,8 @@ def test_unknown_command():
     res = run_plugin({
         "requestId": "4",
         "command": "explode",
-        "dryRun": False,
-        "args": {}
+        "args": {},
+        "context": {"dryRun": False}
     })
     assert not res["success"]
     assert "error" in res
@@ -495,4 +497,4 @@ Always write tests for at least these four cases:
 | Real Python example | `plugins/obsidian/` |
 | Real TypeScript example | `plugins/vscode/` |
 
-You're ready to build. If you have questions, open a discussion on GitHub.
+You're ready to build.
